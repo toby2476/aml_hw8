@@ -19,17 +19,17 @@ def binarize(train_images):
 	train_images[train_images>=128] = 1
 	return train_images
 
-def add_noise(train_images):
-
+def add_noise(images):
+	noisy_images = np.copy(images)
 	noise_coords = pd.read_csv('../Data/SupplementaryAndSampleData/NoiseCoordinates.csv',sep=',')
-	for i in range(len(train_images)):
+	for i in range(len(noisy_images)):
 		for j in range(15):		
 			image_row = noise_coords['Noisy bit '+str(j)].iloc[i*2]
 			image_col = noise_coords['Noisy bit '+str(j)].iloc[i*2 + 1]
 			bit_idx = image_row*28 + image_col
-			train_images[i,bit_idx] *= -1 	
+			noisy_images[i,bit_idx] *= -1 	
 
-	return train_images
+	return noisy_images
 
 
 def display_image(train_images,i):
@@ -45,19 +45,26 @@ def display_all(train_images):
 		display_image(train_images,i)
 
 
-def save_images(images,description):
+def save_images(orig_images,noisy_images,denoised_images):
+	saved_image = np.zeros((84,280))
+	images = [orig_images,noisy_images,denoised_images]
 	for i in range(len(images)):
-		image_out = np.zeros((images.shape[0],images.shape[1]))
-		image_out[images==-1] = 0
-		image_out[images==1] = 255
-		image_out = image_out.reshape(image_out.shape[0],28,28)
-		image_out = image_out.astype('uint8')
-		im = Image.fromarray(image_out[i,:,:],mode='L')
-		im.save('../Output/Image_'+str(i)+'_'+description+'.png')
+		for j in range(10,len(orig_images)):
+			image_out = np.zeros(images[i][j,:].shape)
+			image_out[images[i][j,:]==-1] = 0
+			image_out[images[i][j,:]==1] = 255
+			image_out = image_out.reshape((28,28))
+			saved_image[28*i:28*(i+1),28*(j-10):28*(j-9)] = image_out
+
+	saved_image = saved_image.astype('uint8')
+	im = Image.fromarray(saved_image,mode='L')
+	im.save('../Output/Images.png')
 		
 def save_predictions(predictions):
-	for i in range(len(predictions)):
-		np.savetxt('../Output/Image_'+str(i)+'_Prediction',predictions[i],delimiter='\t',fmt='%d')
+	pred = np.zeros((28,280))
+	for i in range(10,len(predictions)):
+		pred[:,28*(i-10):28*(i-9)] = predictions[i]	
+	np.savetxt('../Output/Denoised.csv',pred,delimiter=',',fmt='%d')
 
 def mean_field_inference(update_coords,train_images,pi,theta_xh,theta_hh,num_iter,img_num):
 	
@@ -96,7 +103,7 @@ def mean_field_wrapper(update_coords,train_images,initial_params,theta_xh,theta_
 		image = reconstruct_image(pi)
 		image = image.flatten()
 		denoised_images[i,:] = image
-		pred = pi
+		pred = np.copy(pi)
 		pred[pred<0.5] = 0
 		pred[pred>=0.5] = 1
 		predictions.append(pred)
@@ -111,13 +118,11 @@ def main():
 	theta_xh = 2
 	theta_hh = 0.8
 	num_iter = 10
-	train_images,update_coords,initial_params = import_data()
-	train_images = binarize(train_images)
-	save_images(train_images,'original')
-	train_images = add_noise(train_images)
-	save_images(train_images,'noisy')
-	denoised_images, predictions = mean_field_wrapper(update_coords,train_images,initial_params,theta_xh,theta_hh,num_iter)
-	save_images(denoised_images,'denoised')
+	orig_images,update_coords,initial_params = import_data()
+	orig_images = binarize(orig_images)
+	noisy_images = add_noise(orig_images)
+	denoised_images, predictions = mean_field_wrapper(update_coords,noisy_images,initial_params,theta_xh,theta_hh,num_iter)
+	save_images(orig_images,noisy_images,denoised_images)
 	save_predictions(predictions)
 
 main()
