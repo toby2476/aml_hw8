@@ -32,19 +32,6 @@ def add_noise(images):
 	return noisy_images
 
 
-def display_image(train_images,i):
-	image_out = np.zeros((train_images.shape[0],train_images.shape[1]))
-	image_out[train_images==-1] = 0
-	image_out[train_images==1] = 255
-	image_out = image_out.reshape(image_out.shape[0],28,28)
-	im = Image.fromarray(image_out[i,:,:])
-	im.show()
-
-def display_all(train_images):
-	for i in range(len(train_images)):
-		display_image(train_images,i)
-
-
 def save_images(orig_images,noisy_images,denoised_images):
 	saved_image = np.zeros((84,280))
 	images = [orig_images,noisy_images,denoised_images]
