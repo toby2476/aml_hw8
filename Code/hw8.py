@@ -51,8 +51,9 @@ def save_files(predictions,energy_mat):
 	pred = np.zeros((28,280))
 	for i in range(10,len(predictions)):
 		pred[:,28*(i-10):28*(i-9)] = predictions[i]	
-	np.savetxt('../Output/Denoised.csv',pred,delimiter=',',fmt='%d')
-	np.savetxt('../Output/Energy.csv',energy_mat[10:,:],delimiter=',',fmt='%f')
+	np.savetxt('../Output/denoised.csv',pred,delimiter=',',fmt='%d')
+	np.savetxt('../Output/energy.csv',energy_mat[10:12,0:2],delimiter=',',fmt='%f')
+	np.savetxt('../Output/energy_all_values.csv',energy_mat,delimiter=',',fmt='%f')
 
 def mean_field_inference(update_coords,train_images,params,theta_xh,theta_hh,num_iter,img_num):
 	
