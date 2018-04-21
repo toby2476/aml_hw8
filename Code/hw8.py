@@ -47,15 +47,21 @@ def save_images(orig_images,noisy_images,denoised_images):
 	im = Image.fromarray(saved_image,mode='L')
 	im.save('../Output/Images.png')
 		
-def save_predictions(predictions):
+def save_files(predictions,energy_mat):
 	pred = np.zeros((28,280))
 	for i in range(10,len(predictions)):
 		pred[:,28*(i-10):28*(i-9)] = predictions[i]	
 	np.savetxt('../Output/Denoised.csv',pred,delimiter=',',fmt='%d')
+	np.savetxt('../Output/Energy.csv',energy_mat[10:,:],delimiter=',',fmt='%f')
 
-def mean_field_inference(update_coords,train_images,pi,theta_xh,theta_hh,num_iter,img_num):
+def mean_field_inference(update_coords,train_images,params,theta_xh,theta_hh,num_iter,img_num):
 	
-	for a in range(num_iter):		
+	energy_list = []
+	pi = np.copy(params)
+	init_energy = energy_function(pi,theta_xh,theta_hh,train_images,img_num)
+	energy_list.append(init_energy)
+	for a in range(num_iter):
+	
 		for i in range(len(train_images[img_num,:])):
 			row = update_coords['Pixel '+str(i)].iloc[2*img_num]
 			col = update_coords['Pixel '+str(i)].iloc[2*img_num + 1]
@@ -73,8 +79,11 @@ def mean_field_inference(update_coords,train_images,pi,theta_xh,theta_hh,num_ite
 			sum4 = -theta_xh * train_images[img_num,row*len(pi[0,:])+col]
 			pi_i = (np.exp(sum1 + sum2))/(np.exp(sum1 + sum2)+np.exp(sum3 + sum4))
 			pi[row,col] = pi_i
+		
+		energy = energy_function(pi,theta_xh,theta_hh,train_images,img_num)
+		energy_list.append(energy)		
 
-	return pi
+	return pi, energy_list
 
 def reconstruct_image(pi):
 	image = np.zeros(pi.shape)
@@ -82,11 +91,31 @@ def reconstruct_image(pi):
 	image[pi>=0.5] = 1
 	return image
 	
+def energy_function(pi,theta_xh,theta_hh,images,img_num):
+	term1 = 0
+	term2 = 0
+	for i in range(pi.shape[0]):
+		for j in range(pi.shape[1]):
+			term1 += pi[i,j]*np.log(pi[i,j]+10e-10) + (1-pi[i,j])*np.log(1-pi[i,j]+10e-10)
+			neighbors = []
+			if(i != 0): neighbors.append(pi[i-1,j])
+			if(i != len(pi)-1): neighbors.append(pi[i+1,j])
+			if(j != 0): neighbors.append(pi[i,j-1])
+			if(j != len(pi[0,:])-1): neighbors.append(pi[i,j+1])
+			for k in neighbors:
+				term2 += theta_hh*(2*pi[i,j]-1)*(2*k - 1)
+			term2 += theta_xh*(2*pi[i,j]-1)*images[img_num,i*pi.shape[1] + j]
+	
+	energy = term1 - term2
+	return energy	
+				
+
 def mean_field_wrapper(update_coords,train_images,initial_params,theta_xh,theta_hh,num_iter):
 	denoised_images = np.zeros(train_images.shape)
 	predictions = []
+	energy_mat = np.zeros((train_images.shape[0],num_iter+1))
 	for i in range(len(train_images)):
-		pi = mean_field_inference(update_coords,train_images,initial_params,theta_xh,theta_hh,num_iter,i)
+		pi, energy = mean_field_inference(update_coords,train_images,initial_params,theta_xh,theta_hh,num_iter,i)
 		image = reconstruct_image(pi)
 		image = image.flatten()
 		denoised_images[i,:] = image
@@ -94,9 +123,9 @@ def mean_field_wrapper(update_coords,train_images,initial_params,theta_xh,theta_
 		pred[pred<0.5] = 0
 		pred[pred>=0.5] = 1
 		predictions.append(pred)
+		energy_mat[i,:] = energy
 		
-
-	return denoised_images,predictions
+	return denoised_images,predictions,energy_mat
 	
 
 
@@ -108,8 +137,8 @@ def main():
 	orig_images,update_coords,initial_params = import_data()
 	orig_images = binarize(orig_images)
 	noisy_images = add_noise(orig_images)
-	denoised_images, predictions = mean_field_wrapper(update_coords,noisy_images,initial_params,theta_xh,theta_hh,num_iter)
+	denoised_images, predictions, energy_mat = mean_field_wrapper(update_coords,noisy_images,initial_params,theta_xh,theta_hh,num_iter)
 	save_images(orig_images,noisy_images,denoised_images)
-	save_predictions(predictions)
+	save_files(predictions,energy_mat)
 
 main()
